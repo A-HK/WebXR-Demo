@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>three.js ar - lighting estimation</title>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <link type="text/css" rel="stylesheet" href="main.css" />
+  </head>
+  <body>
+    <div id="info">
+      <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a>
+      ar - Lighting Estimation<br />
+      (Chrome Android 90+)
+    </div>
+
+    <!-- Import maps polyfill -->
+    <!-- Remove this when import maps will be widely supported -->
+    <script
+      async
+      src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"
+    ></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../build/three.module.js"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { RGBELoader } from "./jsm/loaders/RGBELoader.js";
+      import { ARButton } from "./jsm/webxr/ARButton.js";
+      import { XREstimatedLight } from "./jsm/webxr/XREstimatedLight.js";
+      import { GLTFLoader } from "./jsm/loaders/GLTFLoader.js";
+      import { TubePainter } from "./jsm/misc/TubePainter.js"; //tube painter
+      import { OrbitControls } from "./jsm/controls/OrbitControls.js";
+
+      let camera, scene, renderer;
+      let controller;
+      let defaultEnvironment;
+
+      let container; //tube painter
+      let painter; //tube painter
+
+      const cursor = new THREE.Vector3(); //tube painter
+
+      init();
+      animate();
+
+      function init() {
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+
+        scene = new THREE.Scene();
+
+        camera = new THREE.PerspectiveCamera(
+          70,
+          window.innerWidth / window.innerHeight,
+          0.01,
+          20
+        );
+
+        const defaultLight = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+        defaultLight.position.set(0.5, 1, 0.25);
+        scene.add(defaultLight);
+
+        //
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.physicallyCorrectLights = true;
+        renderer.xr.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        // Don't add the XREstimatedLight to the scene initially.
+        // It doesn't have any estimated lighting values until an AR session starts.
+
+        const xrLight = new XREstimatedLight(renderer);
+
+        xrLight.addEventListener("estimationstart", () => {
+          // Swap the default light out for the estimated one one we start getting some estimated values.
+          scene.add(xrLight);
+          scene.remove(defaultLight);
+
+          // The estimated lighting also provides an environment cubemap, which we can apply here.
+          if (xrLight.environment) {
+            scene.environment = xrLight.environment;
+          }
+        });
+
+        xrLight.addEventListener("estimationend", () => {
+          // Swap the lights back when we stop receiving estimated values.
+          scene.add(defaultLight);
+          scene.remove(xrLight);
+
+          // Revert back to the default environment.
+          scene.environment = defaultEnvironment;
+        });
+
+        //
+
+        new RGBELoader()
+          .setPath("textures/equirectangular/")
+          .load("royal_esplanade_1k.hdr", function (texture) {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+
+            defaultEnvironment = texture;
+
+            scene.environment = defaultEnvironment;
+          });
+
+        //
+
+        // In order for lighting estimation to work, 'light-estimation' must be included as either an optional or required feature.
+        document.body.appendChild(
+          ARButton.createButton(renderer, {
+            optionalFeatures: ["light-estimation"]
+          })
+        );
+
+        //
+        /*
+        const ballGeometry = new THREE.SphereBufferGeometry(0.175, 32, 32);
+        const ballGroup = new THREE.Group();
+        ballGroup.position.z = -2;
+
+        const rows = 3;
+        const cols = 3;
+
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            const ballMaterial = new THREE.MeshStandardMaterial({
+              color: 0xdddddd,
+              roughness: i / rows,
+              metalness: j / cols
+            });
+            const ballMesh = new THREE.Mesh(ballGeometry, ballMaterial);
+            ballMesh.position.set(
+              (i + 0.5 - rows * 0.5) * 0.4,
+              (j + 0.5 - cols * 0.5) * 0.4,
+              0
+            );
+            ballGroup.add(ballMesh);
+          }
+        }
+
+        // scene.add(ballGroup);
+*/
+        //experiment
+        const loader = new GLTFLoader();
+
+        // Load a glTF resource
+        loader.load(
+          // resource URL
+          // "media/final_title_card_3.glb",
+          "media/combined_exp.glb",
+          // called when the resource is loaded
+          function (gltf) {
+            scene.add(gltf.scene);
+
+            gltf.animations; // Array<THREE.AnimationClip>
+            gltf.scene; // THREE.Group
+            gltf.scenes; // Array<THREE.Group>
+            gltf.cameras; // Array<THREE.Camera>
+            gltf.asset; // Object
+
+            //gltf.scene.rotateX(90);
+            gltf.scene.position
+              .set(0, 2, -2)
+              .applyMatrix4(controller.matrixWorld);
+          },
+          // called while loading is progressing
+          function (xhr) {
+            console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
+          },
+          // called when loading has errors
+          function (error) {
+            console.log("An error happened");
+          }
+        );
+        //end
+        /*
+        function onSelect() {
+          ballGroup.position.set(0, 0, -2).applyMatrix4(controller.matrixWorld);
+          ballGroup.quaternion.setFromRotationMatrix(controller.matrixWorld);
+        }*/
+
+        //tube painter experiment
+        //
+
+        painter = new TubePainter();
+        painter.setSize(0.4);
+        painter.mesh.material.side = THREE.DoubleSide;
+        scene.add(painter.mesh);
+
+        //
+
+        function onSelectStart() {
+          this.userData.isSelecting = true;
+          this.userData.skipFrames = 2;
+        }
+
+        function onSelectEnd() {
+          this.userData.isSelecting = false;
+        }
+
+        //end
+
+        controller = renderer.xr.getController(0);
+        //controller.addEventListener("select", onSelect);
+        controller.addEventListener("selectstart", onSelectStart); //tube painter
+        controller.addEventListener("selectend", onSelectEnd); //tube painter
+        controller.userData.skipFrames = 0; //tube painter
+        scene.add(controller);
+
+        //
+
+        window.addEventListener("resize", onWindowResize);
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      //
+      // tube painter experiment
+      //
+
+      function handleController(controller) {
+        const userData = controller.userData;
+
+        cursor.set(0, 0, -0.2).applyMatrix4(controller.matrixWorld);
+
+        if (userData.isSelecting === true) {
+          if (userData.skipFrames >= 0) {
+            // TODO(mrdoob) Revisit this
+
+            userData.skipFrames--;
+
+            painter.moveTo(cursor);
+          } else {
+            painter.lineTo(cursor);
+            painter.update();
+          }
+        }
+      }
+      // end
+
+      function animate() {
+        renderer.setAnimationLoop(render);
+      }
+
+      function render() {
+        handleController(controller);
+        renderer.render(scene, camera);
+      }
+    </script>
+  </body>
+</html>

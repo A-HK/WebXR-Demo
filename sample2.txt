@@ -1,0 +1,33 @@
+    function loadModel(url) {
+          return new Promise((resolve) => {
+            new THREE.GLTFLoader().load(url, resolve);
+          });
+        }
+
+        let model1, model2, model3;
+
+        let p1 = loadModel("media/model1/combined_exp.glb").then((result) => {
+          model1 = result.scene.children[0];
+        });
+        let p2 = loadModel("media/scene.gltf").then((result) => {
+          model2 = result.scene.children[0];
+        });
+        let p3 = loadModel("media/hud_ui_exp.glb").then((result) => {
+          model3 = result.scene.children[0];
+        });
+
+        //if all Promises resolved
+        Promise.all([p1, p2, p3]).then(() => {
+          //do something to the model
+          //  model1.position.set(0, 0, 0);
+          // model2.position.set(0, 20, 0);
+          //  model3.position.set(0, 50, 0);
+
+          //add model to the scene
+          scene.add(model1);
+          scene.add(model2);
+          scene.add(model3);
+
+          //continue the process
+          // startRenderLoop();
+        });
